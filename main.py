@@ -77,6 +77,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 GITHUB_API_URL = "https://api.github.com/search/repositories"
 ARXIV_API_URL = "http://export.arxiv.org/api/query"
 GITHUB_API_BASE_URL = "https://api.github.com/repos"
+COURSERA_API_URL = "https://api.coursera.org/api/courses.v1"
+
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -299,6 +301,81 @@ async def fetch_blogs(query: str, max_results: int = 5):
         return []
 
 
+
+async def fetch_coursera_courses(query: str, max_results: int = 10, page: int = 1):
+    """Fetch AI-related courses from Coursera API, including descriptions."""
+    start_index = (page - 1) * max_results  # Calculate pagination offset
+
+    params = {
+        "q": "search",  # The query type
+        "query": query,  # The search string (AI, Machine Learning, etc.)
+        "limit": max_results,  # Number of results per page
+        "start": start_index,  # Pagination offset
+        "includes": "partnerIds,photoUrl,description"  # Request additional fields
+    }
+
+    print(f"Fetching Coursera courses with query: {query}")  # Debug print to check query string
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(COURSERA_API_URL, params=params)
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail="Failed to fetch Coursera data")
+
+    # Debug: print the full response text
+    print(f"Response Body: {response.text}")
+
+    try:
+        data = response.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error parsing response JSON: {str(e)}")
+
+    # Debug: check the structure of the response data
+    print(f"Response JSON: {data}")
+
+    courses = []
+    if 'elements' in data and data['elements']:  # Check if 'elements' is present and not empty
+        courses = [
+            {
+                "resource_type": "courses",
+                "title": course["name"],
+                "url": f"https://www.coursera.org/learn/{course['slug']}",
+                "thumbnail": course.get("photoUrl", "https://www.coursera.org/default-thumbnail.jpg"),
+                "platform": "Coursera",
+                "description": course.get("description", "No description available")
+            }
+            for course in data["elements"]
+        ]
+    else:
+        # When 'elements' is missing or empty, extract data from facets
+        facets = data.get("paging", {}).get("facets", {})
+        
+        # Get courses from the most relevant subdomain based on query
+        subdomains = facets.get("subdomains", {}).get("facetEntries", [])
+        
+        if subdomains:
+            # Create artificial course entries from subdomain information
+            for subdomain in subdomains[:max_results]:
+                courses.append({
+                    "resource_type": "courses",
+                    "title": f"{subdomain.get('name', 'Unknown')} Courses",
+                    "url": f"https://www.coursera.org/browse/{subdomain.get('id', '')}",
+                    "thumbnail": "https://www.coursera.org/default-thumbnail.jpg",
+                    "platform": "Coursera",
+                    "description": f"Browse {subdomain.get('count', 0)} courses in {subdomain.get('name', 'this category')}"
+                })
+        
+        print(f"Created {len(courses)} alternate recommendations from facets")
+
+    if not courses:
+        print("No courses found for the query")  # Debug print for empty result
+
+    return courses
+
+
+
+
+
 @app.get("/search-ai-repos")
 async def search_ai_repositories(q: str = Query(..., title="Search Query"),
     max_results: int = Query(10, title="Max Results Per Page"),
@@ -458,9 +535,10 @@ async def v2_get_resources(
 ):
     try:
         # Split max_results between GitHub, arXiv, and Blogs
-        github_limit = max_results // 3
-        arxiv_limit = max_results // 3
-        blogs_limit = max_results - (github_limit + arxiv_limit)  # Ensures we always get 'max_results' total
+        github_limit = max_results // 4
+        arxiv_limit = max_results // 4
+        blogs_limit = max_results // 4
+        courses_limit = max_results - (github_limit + arxiv_limit + blogs_limit)
 
         # Fetch only required results for the requested page
         try:
@@ -481,7 +559,13 @@ async def v2_get_resources(
             print("Error fetching Blogs:", e)
             blogs = []
 
-        all_results = github_repos + arxiv_papers + blogs
+        try:
+            courses = await fetch_coursera_courses(query=q, max_results=courses_limit, page=page)
+        except Exception as e:
+            print("Error fetching courses:", e)
+            courses = []
+
+        all_results = github_repos + arxiv_papers + blogs + courses
         ranked_results = rank_results(q, all_results)
 
         return {
@@ -511,12 +595,13 @@ async def get_filtered_resources(
     page: int = 1
 ):
     try:
-        available_filters = ["github", "research_papers", "blogs"]
+        available_filters = ["github", "research_papers", "blogs", "courses"]
         selected_filters = filters.split(",") if filters else available_filters  # Apply all filters if none are selected
 
         github_repos = []
         arxiv_papers = []
         blogs = []
+        courses = []
 
         # Compute resource limits correctly
         source_count = len(selected_filters)
@@ -537,7 +622,14 @@ async def get_filtered_resources(
         if "blogs" in selected_filters:
             blogs = await fetch_blogs(q, max_results=per_source_limit + (1 if remainder > 0 else 0))
 
-        all_results = github_repos + arxiv_papers + blogs
+        if "courses" in selected_filters:
+            try:
+                courses = await fetch_coursera_courses(q, max_results=per_source_limit + (1 if remainder > 0 else 0), page=page)
+            except httpx.ReadTimeout:
+                print("Timeout occurred while fetching ArXiv papers")
+                courses = [] 
+
+        all_results = github_repos + arxiv_papers + blogs + courses
         ranked_results = rank_results(q, all_results)
 
         return {
@@ -760,3 +852,15 @@ async def get_pending_approval_resources(
     approved_resources = db.query(models.CommunityUpload).filter(models.CommunityUpload.status == "approved").all()
 
     return approved_resources
+
+@app.get("/courses")
+async def get_coursera_courses(
+    query: str = Query(..., min_length=1),
+    max_results: int = Query(10, ge=1, le=50),
+    page: int = Query(1, ge=1)
+):
+    """API to fetch Coursera courses based on search query with pagination."""
+    print("query", query)
+    courses = await fetch_coursera_courses(query, max_results, page)
+
+    return {"query": query, "page": page, "results": courses}
