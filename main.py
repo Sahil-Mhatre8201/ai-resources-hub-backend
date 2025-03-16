@@ -25,6 +25,11 @@ GITHUB_API_URL = "https://api.github.com/search/repositories"
 ARXIV_API_URL = "http://export.arxiv.org/api/query"
 GITHUB_API_BASE_URL = "https://api.github.com/repos"
 
+COURSERA_API_URL = "https://api.coursera.org/api/courses.v1"
+EDX_API_URL = "https://www.edx.org/api/catalog/v1/courses"
+
+
+
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -45,7 +50,7 @@ HEADERS = {
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,8 +68,49 @@ reddit = praw.Reddit(
 
 openai.api_key = OPENAI_API_KEY
 
+#AI handbooks static data
+AI_HANDBOOKS = [
+    {
+        "title": "Deep Learning",
+        "url": "https://www.deeplearningbook.org/",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/en/6/68/Deep_Learning_Book_cover.jpg",
+        "description": "Comprehensive deep learning book by Ian Goodfellow, Yoshua Bengio, and Aaron Courville.",
+        "platform": "Book",
+        "author": "Ian Goodfellow, Yoshua Bengio, Aaron Courville",
+        "publication_year": "2016"
+    },
+    {
+        "title": "Stanford CS229 Machine Learning Notes",
+        "url": "https://cs229.stanford.edu/",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/8/80/Andrew_Ng.png",
+        "description": "Lecture notes from Stanford's CS229 course by Andrew Ng.",
+        "platform": "Course Notes",
+        "author": "Andrew Ng",
+        "publication_year": "Ongoing"
+    },
+    {
+        "title": "MIT 6.S191: Introduction to Deep Learning",
+        "url": "https://introtodeeplearning.com/","thumbnail": "https://introtodeeplearning.com/assets/logo.png",
+        "description": "MIT’s official introductory deep learning course materials.",
+        "platform": "Course Notes",
+        "author": "MIT Deep Learning",
+        "publication_year": "Ongoing"
+    },
+    {
+        "title": "Pattern Recognition and Machine Learning",
+        "url": "https://www.microsoft.com/en-us/research/people/cmbishop/prml-book/",
+        "thumbnail": "https://www.microsoft.com/en-us/research/uploads/prod/2016/11/prml-cover.jpg",
+        "description": "Comprehensive book on probabilistic machine learning by Christopher Bishop.",
+        "platform": "Book",
+        "author": "Christopher Bishop",
+        "publication_year": "2006"
+    }
+]
+
+
 class ChatRequest(BaseModel):
     message: str
+
 
 
 async def fetch_github_repos(query: str, per_page: int = 30, page: int = 1):
@@ -183,6 +229,65 @@ async def fetch_arxiv_papers(query: str, max_results: int = 30, page: int = 1):
     return papers
 
 
+import requests
+
+async def fetch_coursera_courses(query: str, max_results: int = 10):
+    """Fetch AI-related courses from Coursera API, including thumbnails & descriptions."""
+    try:
+        params = {"query": query, "limit": max_results}
+        response = requests.get(COURSERA_API_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        courses = [
+            {
+                "resource_type": "courses",
+                "title": course["name"],
+                "url": f"https://www.coursera.org/learn/{course['slug']}",
+                "thumbnail": course.get("photoUrl", "https://www.coursera.org/default-thumbnail.jpg"),
+                #"description": course.get("description", "No description available"),
+                "platform": "Coursera",
+                #"duration": f"{course.get('workload', 'Unknown')} hours"
+            }
+            for course in data.get("elements", [])
+        ]
+        return courses
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching Coursera courses: {e}")
+        return []
+
+
+async def fetch_edx_courses(query: str, max_results: int = 10):
+    """Fetch AI-related courses from edX API, including thumbnails & descriptions."""
+    try:
+        params = {"search_query": query, "limit": max_results}
+        response = requests.get(EDX_API_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        courses = [
+            {
+                "resource_type": "courses",
+                "title": course["title"],
+                "url": course["marketing_url"],
+                "thumbnail": course["image"]["src"] if "image" in course and "src" in course["image"] else "https://www.edx.org/default-thumbnail.jpg",
+                "description": course.get("full_description", "No description available"),
+                "platform": "edX",
+                "duration": course.get("effort", "Unknown")
+            }
+            for course in data.get("results", [])
+        ]
+        return courses
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching edX courses: {e}")
+        return []
+
+async def fetch_courses(query: str, max_results: int = 10):
+    """Fetch AI courses from multiple platforms: Coursera, edX, Udacity, Fast.ai"""
+    coursera_courses = await fetch_coursera_courses(query, max_results)
+    edx_courses = await fetch_edx_courses(query, max_results)
+    
+    return coursera_courses + edx_courses 
 
 async def fetch_blogs(query: str, max_results: int = 5):
     try:
@@ -205,6 +310,20 @@ async def fetch_blogs(query: str, max_results: int = 5):
 
     except Exception as e:
         print(f"Error fetching blogs: {e}")
+        return []
+
+async def fetch_ai_handbooks(query: str, max_results: int = 10):
+    """Fetch AI-related handbooks & documentation based on query."""
+    try:
+        # Simple text-based search in static AI_HANDBOOKS list
+        results = [
+            book for book in AI_HANDBOOKS
+            if query.lower() in book["title"].lower() or query.lower() in book["description"].lower()
+        ]
+
+        return results[:max_results]  # Limit results
+    except Exception as e:
+        print(f"Error fetching AI handbooks: {e}")
         return []
 
 
@@ -236,6 +355,24 @@ async def search_arxiv_papers(
         "papers": papers
     }
 
+@app.get("/search-courses")
+async def search_courses(
+    q: str = Query(..., title="Search Query"),
+    max_results: int = Query(10, title="Max Results Per Page"),
+    page: int = Query(1, title="Page Number")
+):
+    """Fetch AI courses from Coursera & edX."""
+    try:
+        courses = await fetch_courses(q, max_results)
+
+        return {
+            "page": page,
+            "max_results": max_results,
+            "courses": courses
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch courses: {str(e)}")
+
 @app.get("/search-blogs")
 async def search_arxiv_papers(
     q: str = Query(..., title="Search Query"), 
@@ -256,8 +393,8 @@ async def get_resources(q: str = Query(..., title="Search Query"), max_results: 
     Returns a JSON object containing both types of resources.
     """
     try:
-        github_repos, arxiv_papers = await fetch_github_repos(q, max_results), await fetch_arxiv_papers(q, max_results)
-        return {"repositories": github_repos, "arxivPapers": arxiv_papers}
+        github_repos, arxiv_papers, courses, handbooks = await fetch_github_repos(q, max_results), await fetch_arxiv_papers(q, max_results), await fetch_courses(q, max_results),await fetch_ai_handbooks(q, max_results)
+        return {"repositories": github_repos, "arxivPapers": arxiv_papers,"courses":courses,"handbooks":handbooks}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch resources: {str(e)}")
 
@@ -362,14 +499,17 @@ def rank_results(query: str, resources: List[dict]) -> List[dict]:
 @app.get("/v2-get-resources")
 async def v2_get_resources(
     q: str = Query(..., title="Search Query"), 
-    max_results: int = 15,   # Number of results per page
+    max_results: int = 25,   # Number of results per page
     page: int = 1
 ):
     try:
         # Split max_results between GitHub, arXiv, and Blogs
-        github_limit = max_results // 3
-        arxiv_limit = max_results // 3
-        blogs_limit = max_results - (github_limit + arxiv_limit)  # Ensures we always get 'max_results' total
+        github_limit = max_results // 5
+        arxiv_limit = max_results // 5
+        blogs_limit = max_results//5 # Ensures we always get 'max_results' total
+        handbooks_limit=max_results//5
+        courses_limit = max_results - (github_limit + arxiv_limit + blogs_limit+handbooks_limit)
+
 
         # Fetch only required results for the requested page
         try:
@@ -390,7 +530,19 @@ async def v2_get_resources(
             print("Error fetching Blogs:", e)
             blogs = []
 
-        all_results = github_repos + arxiv_papers + blogs
+        try:
+            courses = await fetch_courses(q, max_results=courses_limit)
+        except Exception as e:
+            print("Error fetching Courses:", e)
+            courses = []
+
+        try:
+            handbooks = await fetch_ai_handbooks(q, max_results=handbooks_limit)
+        except Exception as e:
+            print("Error fetching Courses:", e)
+            courses = []
+
+        all_results = github_repos + arxiv_papers + blogs + courses + handbooks
         ranked_results = rank_results(q, all_results)
 
         return {
@@ -401,7 +553,7 @@ async def v2_get_resources(
 
 
     except Exception as e:
-        rror_trace = traceback.format_exc()
+        error_trace = traceback.format_exc()
         print("Error while fetching all resources:", e)
         print("Stack trace:", error_trace)  # Logs the exact issue
         
@@ -453,12 +605,14 @@ async def get_filtered_resources(
     page: int = 1
 ):
     try:
-        available_filters = ["github", "research_papers", "blogs"]
+        available_filters = ["github", "research_papers", "blogs", "courses","handbooks"]
         selected_filters = filters.split(",") if filters else available_filters  # Apply all filters if none are selected
 
         github_repos = []
         arxiv_papers = []
         blogs = []
+        courses=[]
+        handbooks=[]
 
         # Compute resource limits correctly
         source_count = len(selected_filters)
@@ -479,7 +633,13 @@ async def get_filtered_resources(
         if "blogs" in selected_filters:
             blogs = await fetch_blogs(q, max_results=per_source_limit + (1 if remainder > 0 else 0))
 
-        all_results = github_repos + arxiv_papers + blogs
+        if "courses" in selected_filters:
+            courses = await fetch_courses(q, max_results=per_source_limit + (1 if remainder > 0 else 0))
+
+        if "handbooks" in selected_filters:
+            handbooks = await fetch_ai_handbooks(q, max_results)
+
+        all_results = github_repos + arxiv_papers + blogs+ courses +handbooks
         ranked_results = rank_results(q, all_results)
 
         return {
