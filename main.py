@@ -29,6 +29,8 @@ from fastapi.responses import JSONResponse
 from passlib.context import CryptContext
 from fastapi import Cookie
 from fastapi import Response
+import traceback
+
 
 
 
@@ -512,7 +514,9 @@ async def get_repo_details(owner: str, repo: str):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error fetching repo details: {str(e)}")
 
-def rank_results(query: str, resources: List[dict]) -> List[dict]:
+def rank_results(query: str, resources: List[dict] = None) -> List[dict]:
+    if resources is None or len(resources) == 0:
+        return []
     query = query.lower().strip()
 
     # Extract titles and descriptions
