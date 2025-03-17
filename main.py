@@ -30,6 +30,8 @@ from passlib.context import CryptContext
 from fastapi import Cookie
 from fastapi import Response
 import traceback
+import asyncpraw
+
 
 
 
@@ -158,7 +160,7 @@ CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
 CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
 
 
-reddit = praw.Reddit(
+reddit = asyncpraw.Reddit(
     client_id=CLIENT_ID,  # Your client_id
     client_secret=CLIENT_SECRET,  # Your client_secret
     user_agent="python:ai-hub:v1.0 (by /u/Last_Internet_9156)"  # Your custom user agent
@@ -331,7 +333,7 @@ async def fetch_blogs(query: str, max_results: int = 5):
         search_results = reddit.subreddit("datascience").search(query, limit=max_results)
 
         filtered_posts = []
-        for submission in search_results:
+        async for submission in search_results:
             filtered_posts.append({
                 'resource_type': "blog",
                 'title': submission.title,
