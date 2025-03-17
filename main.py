@@ -47,6 +47,49 @@ app.include_router(bookmark_router, prefix="/bookmarks", tags=["Bookmarks"])
 # app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 # app.include_router(bookmark_router, prefix="/bookmarks", tags=["Bookmarks"])
 
+AI_HANDBOOKS = [
+    {
+        "resource_type": "handbook",
+        "title": "Deep Learning",
+        "url": "https://www.deeplearningbook.org/",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/en/6/68/Deep_Learning_Book_cover.jpg",
+        "description": "Comprehensive deep learning book by Ian Goodfellow, Yoshua Bengio, and Aaron Courville.",
+        "platform": "Book",
+        "author": "Ian Goodfellow, Yoshua Bengio, Aaron Courville",
+        "publication_year": "2016"
+    },
+    {
+        "resource_type": "handbook",
+        "title": "Stanford CS229 Machine Learning Notes",
+        "url": "https://cs229.stanford.edu/",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/8/80/Andrew_Ng.png",
+        "description": "Lecture notes from Stanford's CS229 course by Andrew Ng.",
+        "platform": "Course Notes",
+        "author": "Andrew Ng",
+        "publication_year": "Ongoing"
+    },
+    {
+        "resource_type": "handbook",
+        "title": "MIT 6.S191: Introduction to Deep Learning",
+        "url": "https://introtodeeplearning.com/",
+        "thumbnail": "https://introtodeeplearning.com/assets/logo.png",
+        "description": "MIT’s official introductory deep learning course materials.",
+        "platform": "Course Notes",
+        "author": "MIT Deep Learning",
+        "publication_year": "Ongoing"
+    },
+    {
+        "resource_type": "handbook",
+        "title": "Pattern Recognition and Machine Learning",
+        "url": "https://www.microsoft.com/en-us/research/people/cmbishop/prml-book/",
+        "thumbnail": "https://www.microsoft.com/en-us/research/uploads/prod/2016/11/prml-cover.jpg",
+        "description": "Comprehensive book on probabilistic machine learning by Christopher Bishop.",
+        "platform": "Book",
+        "author": "Christopher Bishop",
+        "publication_year": "2006"
+    }
+]
+
 def hash_password(password: str) -> str:
     # Generate a salt
     salt = bcrypt.gensalt()
@@ -530,7 +573,7 @@ def rank_results(query: str, resources: List[dict]) -> List[dict]:
 @app.get("/v2-get-resources")
 async def v2_get_resources(
     q: str = Query(..., title="Search Query"), 
-    max_results: int = 15,   # Number of results per page
+    max_results: int = 20,   # Number of results per page
     page: int = 1
 ):
     try:
@@ -565,7 +608,7 @@ async def v2_get_resources(
             print("Error fetching courses:", e)
             courses = []
 
-        all_results = github_repos + arxiv_papers + blogs + courses
+        all_results = github_repos + arxiv_papers + blogs + courses + AI_HANDBOOKS
         ranked_results = rank_results(q, all_results)
 
         return {
@@ -595,13 +638,14 @@ async def get_filtered_resources(
     page: int = 1
 ):
     try:
-        available_filters = ["github", "research_papers", "blogs", "courses"]
+        available_filters = ["github", "research_papers", "blogs", "courses", "handbook"]
         selected_filters = filters.split(",") if filters else available_filters  # Apply all filters if none are selected
 
         github_repos = []
         arxiv_papers = []
         blogs = []
         courses = []
+        handbooks = []
 
         # Compute resource limits correctly
         source_count = len(selected_filters)
@@ -628,8 +672,10 @@ async def get_filtered_resources(
             except httpx.ReadTimeout:
                 print("Timeout occurred while fetching ArXiv papers")
                 courses = [] 
+        if "hanbbook" in selected_filters:
+            handbooks = AI_HANDBOOKS if page == 1 else []
 
-        all_results = github_repos + arxiv_papers + blogs + courses
+        all_results = github_repos + arxiv_papers + blogs + courses + handbooks
         ranked_results = rank_results(q, all_results)
 
         return {
@@ -864,3 +910,7 @@ async def get_coursera_courses(
     courses = await fetch_coursera_courses(query, max_results, page)
 
     return {"query": query, "page": page, "results": courses}
+
+@app.get("/ai-handbooks")
+async def get_ai_handbooks():
+    return {"handbooks": AI_HANDBOOKS}
