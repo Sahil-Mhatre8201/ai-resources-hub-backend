@@ -676,10 +676,11 @@ async def get_filtered_resources(
             except httpx.ReadTimeout:
                 print("Timeout occurred while fetching ArXiv papers")
                 courses = [] 
-        if "hanbbook" in selected_filters:
+        if "handbook" in selected_filters:
             handbooks = AI_HANDBOOKS if page == 1 else []
 
         all_results = github_repos + arxiv_papers + blogs + courses + handbooks
+     
         ranked_results = rank_results(q, all_results)
 
         return {
