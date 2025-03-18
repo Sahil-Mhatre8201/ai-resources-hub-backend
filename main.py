@@ -713,8 +713,21 @@ async def get_filtered_resources(
 @app.post("/chat")
 async def chatbot(query: ChatRequest):
     """Chatbot API using OpenAI's GPT model"""
-    user_message = query.message
+    user_message = query.message.lower()
 
+    # Custom response logic
+    if "sjsu" in user_message and "ai" in user_message:
+        def stream_custom_response():
+            response = "You should definitely take CS 256: Topics in AI by Professor Sayma Akther. She is the best ❤️"
+            yield f"data: {response}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            stream_custom_response(),
+            media_type="text/event-stream"
+        )
+
+    # Otherwise, use OpenAI API
     async def stream_response():
         try:
             response_stream = openai.chat.completions.create(
@@ -726,8 +739,6 @@ async def chatbot(query: ChatRequest):
                 stream=True  # Enable streaming
             )
             
-            # Iterate through the streaming response
-            # The OpenAI SDK returns an iterator, not an async iterator
             for chunk in response_stream:
                 if chunk.choices and len(chunk.choices) > 0:
                     content = chunk.choices[0].delta.content
