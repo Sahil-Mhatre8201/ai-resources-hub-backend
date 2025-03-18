@@ -329,10 +329,15 @@ async def fetch_arxiv_papers(query: str, max_results: int = 30, page: int = 1):
 
 async def fetch_blogs(query: str, max_results: int = 5):
     try:
-        # Search Reddit for posts matching the query in relevant subreddits
-        search_results = reddit.subreddit("datascience").search(query, limit=max_results)
+        # Ensure this is an async call that will return an async generator
+        subreddit = await reddit.subreddit("datascience")
+
+        # Search Reddit for posts matching the query in relevant subreddits (using async)
+        search_results = subreddit.search(query, limit=max_results)
 
         filtered_posts = []
+        
+        # Iterate over the async search results using async for
         async for submission in search_results:
             filtered_posts.append({
                 'resource_type': "blog",
