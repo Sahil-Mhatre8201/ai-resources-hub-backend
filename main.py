@@ -37,7 +37,6 @@ import traceback
 
 
 
-
 load_dotenv()
 
 
@@ -111,6 +110,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_current_user(user_id: str = Cookie(None), db: Session = Depends(get_db)):
+    print(f"Received user_id: {user_id}")
+
     if user_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     
@@ -769,7 +770,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
 
     # Set session (e.g., store user ID in cookie for simplicity)
     response = JSONResponse(content={"message": "Login successful"})
-    response.set_cookie(key="user_id", value=str(db_user.id), httponly=True)
+    response.set_cookie(key="user_id", value=str(db_user.id), httponly=True, secure=True, samesite="None")
     return response
 
 @app.post("/bookmarks", response_model=Bookmark, status_code=status.HTTP_201_CREATED)
