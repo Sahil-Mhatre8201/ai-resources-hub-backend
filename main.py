@@ -30,7 +30,6 @@ from passlib.context import CryptContext
 from fastapi import Cookie
 from fastapi import Response
 import traceback
-import asyncpraw
 
 
 
@@ -160,7 +159,7 @@ CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
 CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
 
 
-reddit = asyncpraw.Reddit(
+reddit = praw.Reddit(
     client_id=CLIENT_ID,  # Your client_id
     client_secret=CLIENT_SECRET,  # Your client_secret
     user_agent="python:ai-hub:v1.0 (by /u/Last_Internet_9156)"  # Your custom user agent
@@ -327,18 +326,14 @@ async def fetch_arxiv_papers(query: str, max_results: int = 30, page: int = 1):
 
 
 
+
 async def fetch_blogs(query: str, max_results: int = 5):
     try:
-        # Ensure this is an async call that will return an async generator
-        subreddit = await reddit.subreddit("datascience")
-
-        # Search Reddit for posts matching the query in relevant subreddits (using async)
-        search_results = subreddit.search(query, limit=max_results)
+        # Search Reddit for posts matching the query in relevant subreddits
+        search_results = reddit.subreddit("datascience").search(query, limit=max_results)
 
         filtered_posts = []
-        
-        # Iterate over the async search results using async for
-        async for submission in search_results:
+        for submission in search_results:
             filtered_posts.append({
                 'resource_type': "blog",
                 'title': submission.title,
@@ -465,7 +460,7 @@ async def search_arxiv_papers(
     max_results: int = Query(10, title="Max Results Per Page"),
 ):
     """Route for fetching AI research papers from arXiv with pagination."""
-    papers = await fetch_blogs(q, max_results)
+    papers =  await fetch_blogs(q, max_results)
     
     return {
         "max_results": max_results,
