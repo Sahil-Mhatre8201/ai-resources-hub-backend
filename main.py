@@ -153,7 +153,12 @@ HEADERS = {
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://ai-resources-hub-frontend.vercel.app",
+        "https://ai-resources-hub-frontend-844nzmki5.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
