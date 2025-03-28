@@ -142,7 +142,6 @@ origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://ai-resources-hub-frontend-844nzmki5.vercel.app",
-    "https://*.vercel.app",  # Vercel frontend URL
     "https://ai-resources-hub-frontend.vercel.app",
 
 ]
