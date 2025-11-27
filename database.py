@@ -1,8 +1,18 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+import os
+from dotenv import load_dotenv
 
-# DATABASE_URL = "postgresql://postgres:Sahil%402000@localhost/aihub"
-DATABASE_URL = "postgresql://ai_hub_database_user:VtPXWKaVFQNnw1mWvMMCyxwVMq7al0ue@dpg-cvbs1qofnakc73do2md0-a.oregon-postgres.render.com/ai_hub_database"
+load_dotenv()
+
+# Get DATABASE_URL from environment variable
+# Render automatically provides DATABASE_URL (internal URL) when you link the database to your service
+# For local development, you can set DATABASE_URL in your .env file
+# Note: Use INTERNAL URL when both services are on Render, EXTERNAL URL for local development
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:Sahil%402000@localhost/aihub"
+)
 
 # Create database engine
 engine = create_engine(DATABASE_URL)
