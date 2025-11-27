@@ -364,73 +364,96 @@ async def fetch_blogs(query: str, max_results: int = 5):
 
 async def fetch_coursera_courses(query: str, max_results: int = 10, page: int = 1):
     """Fetch AI-related courses from Coursera API, including descriptions."""
-    start_index = (page - 1) * max_results  # Calculate pagination offset
-
-    params = {
-        "q": "search",  # The query type
-        "query": query,  # The search string (AI, Machine Learning, etc.)
-        "limit": max_results,  # Number of results per page
-        "start": start_index,  # Pagination offset
-        "includes": "partnerIds,photoUrl,description"  # Request additional fields
-    }
-
-    print(f"Fetching Coursera courses with query: {query}")  # Debug print to check query string
-
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.get(COURSERA_API_URL, params=params)
-
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail="Failed to fetch Coursera data")
-
-    # Debug: print the full response text
-    print(f"Response Body: {response.text}")
-
     try:
-        data = response.json()
+        start_index = (page - 1) * max_results  # Calculate pagination offset
+
+        params = {
+            "q": "search",  # The query type
+            "query": query,  # The search string (AI, Machine Learning, etc.)
+            "limit": max_results,  # Number of results per page
+            "start": start_index,  # Pagination offset
+            "includes": "partnerIds,photoUrl,description"  # Request additional fields
+        }
+
+        print(f"Fetching Coursera courses with query: {query}")  # Debug print to check query string
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(COURSERA_API_URL, params=params)
+
+        if response.status_code != 200:
+            print(f"Coursera API returned status {response.status_code}: {response.text}")
+            return []  # Return empty list instead of raising exception
+
+        # Debug: print the full response text
+        print(f"Response Body: {response.text[:500]}...")  # Truncate for logs
+
+        try:
+            data = response.json()
+        except Exception as e:
+            print(f"Error parsing Coursera response JSON: {e}")
+            return []
+
+        # Debug: check the structure of the response data
+        print(f"Response JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+
+        courses = []
+        if 'elements' in data and data['elements']:  # Check if 'elements' is present and not empty
+            try:
+                courses = [
+                    {
+                        "resource_type": "courses",
+                        "title": course.get("name", "Untitled Course"),
+                        "url": f"https://www.coursera.org/learn/{course.get('slug', '')}" if course.get('slug') else "https://www.coursera.org",
+                        "thumbnail": course.get("photoUrl", "https://www.coursera.org/default-thumbnail.jpg"),
+                        "platform": "Coursera",
+                        "description": course.get("description", "No description available")
+                    }
+                    for course in data["elements"]
+                    if course.get("name")  # Only include courses with a name
+                ]
+            except (KeyError, TypeError) as e:
+                print(f"Error parsing course elements: {e}")
+                courses = []
+        else:
+            # When 'elements' is missing or empty, extract data from facets
+            try:
+                facets = data.get("paging", {}).get("facets", {})
+                
+                # Get courses from the most relevant subdomain based on query
+                subdomains = facets.get("subdomains", {}).get("facetEntries", [])
+                
+                if subdomains:
+                    # Create artificial course entries from subdomain information
+                    for subdomain in subdomains[:max_results]:
+                        courses.append({
+                            "resource_type": "courses",
+                            "title": f"{subdomain.get('name', 'Unknown')} Courses",
+                            "url": f"https://www.coursera.org/browse/{subdomain.get('id', '')}",
+                            "thumbnail": "https://www.coursera.org/default-thumbnail.jpg",
+                            "platform": "Coursera",
+                            "description": f"Browse {subdomain.get('count', 0)} courses in {subdomain.get('name', 'this category')}"
+                        })
+                
+                print(f"Created {len(courses)} alternate recommendations from facets")
+            except (KeyError, TypeError) as e:
+                print(f"Error parsing facets: {e}")
+                courses = []
+
+        if not courses:
+            print("No courses found for the query")  # Debug print for empty result
+
+        return courses
+    except httpx.ReadTimeout:
+        print("Timeout while fetching Coursera courses")
+        return []
+    except httpx.RequestError as e:
+        print(f"Network error fetching Coursera courses: {e}")
+        return []
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error parsing response JSON: {str(e)}")
-
-    # Debug: check the structure of the response data
-    print(f"Response JSON: {data}")
-
-    courses = []
-    if 'elements' in data and data['elements']:  # Check if 'elements' is present and not empty
-        courses = [
-            {
-                "resource_type": "courses",
-                "title": course["name"],
-                "url": f"https://www.coursera.org/learn/{course['slug']}",
-                "thumbnail": course.get("photoUrl", "https://www.coursera.org/default-thumbnail.jpg"),
-                "platform": "Coursera",
-                "description": course.get("description", "No description available")
-            }
-            for course in data["elements"]
-        ]
-    else:
-        # When 'elements' is missing or empty, extract data from facets
-        facets = data.get("paging", {}).get("facets", {})
-        
-        # Get courses from the most relevant subdomain based on query
-        subdomains = facets.get("subdomains", {}).get("facetEntries", [])
-        
-        if subdomains:
-            # Create artificial course entries from subdomain information
-            for subdomain in subdomains[:max_results]:
-                courses.append({
-                    "resource_type": "courses",
-                    "title": f"{subdomain.get('name', 'Unknown')} Courses",
-                    "url": f"https://www.coursera.org/browse/{subdomain.get('id', '')}",
-                    "thumbnail": "https://www.coursera.org/default-thumbnail.jpg",
-                    "platform": "Coursera",
-                    "description": f"Browse {subdomain.get('count', 0)} courses in {subdomain.get('name', 'this category')}"
-                })
-        
-        print(f"Created {len(courses)} alternate recommendations from facets")
-
-    if not courses:
-        print("No courses found for the query")  # Debug print for empty result
-
-    return courses
+        error_trace = traceback.format_exc()
+        print(f"Unexpected error fetching Coursera courses: {e}")
+        print(f"Stack trace: {error_trace}")
+        return []
 
 
 
@@ -638,7 +661,7 @@ async def v2_get_resources(
 
 
     except Exception as e:
-        rror_trace = traceback.format_exc()
+        error_trace = traceback.format_exc()
         print("Error while fetching all resources:", e)
         print("Stack trace:", error_trace)  # Logs the exact issue
         
@@ -937,10 +960,19 @@ async def get_coursera_courses(
     page: int = Query(1, ge=1)
 ):
     """API to fetch Coursera courses based on search query with pagination."""
-    print("query", query)
-    courses = await fetch_coursera_courses(query, max_results, page)
-
-    return {"query": query, "page": page, "results": courses}
+    try:
+        print("query", query)
+        courses = await fetch_coursera_courses(query, max_results, page)
+        return {"query": query, "page": page, "results": courses}
+    except HTTPException as e:
+        # Re-raise HTTP exceptions (they already have proper status codes)
+        raise e
+    except Exception as e:
+        # Log the error and return empty results instead of crashing
+        error_trace = traceback.format_exc()
+        print(f"Error fetching Coursera courses: {e}")
+        print(f"Stack trace: {error_trace}")
+        return {"query": query, "page": page, "results": []}
 
 @app.get("/ai-handbooks")
 async def get_ai_handbooks():
