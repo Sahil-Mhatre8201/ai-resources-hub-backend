@@ -138,13 +138,18 @@ if not OPENAI_API_KEY:
     raise ValueError("OpenAI API Key is missing. Set it in the .env file.")
 
 # Allow CORS for frontend requests
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://ai-resources-hub-frontend-844nzmki5.vercel.app",
-    "https://ai-resources-hub-frontend.vercel.app",
-
-]
+# Get allowed origins from environment variable or use defaults
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+if allowed_origins_env:
+    origins = [origin.strip() for origin in allowed_origins_env.split(",")]
+else:
+    origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",  # Alternative port
+        "https://ai-resources-hub-frontend-844nzmki5.vercel.app",
+        "https://ai-resources-hub-frontend.vercel.app",
+    ]
 
 HEADERS = {
     "Authorization": f"token {GITHUB_TOKEN}",
@@ -153,15 +158,11 @@ HEADERS = {
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://ai-resources-hub-frontend.vercel.app",
-        "https://ai-resources-hub-frontend-844nzmki5.vercel.app"
-    ],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET")
