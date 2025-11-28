@@ -125,7 +125,7 @@ def get_current_user(user_id: str = Cookie(None), db: Session = Depends(get_db))
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 GITHUB_API_URL = "https://api.github.com/search/repositories"
-ARXIV_API_URL = "http://export.arxiv.org/api/query"
+ARXIV_API_URL = "https://export.arxiv.org/api/query"
 GITHUB_API_BASE_URL = "https://api.github.com/repos"
 COURSERA_API_URL = "https://api.coursera.org/api/courses.v1"
 
@@ -309,30 +309,41 @@ async def fetch_arxiv_papers(query: str, max_results: int = 30, page: int = 1):
         "max_results": max_results
     }
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.get(ARXIV_API_URL, params=params)
-    
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail="Failed to fetch arXiv data")
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(ARXIV_API_URL, params=params)
+        
+        if response.status_code != 200:
+            print(f"arXiv API returned status {response.status_code}: {response.text[:200]}")
+            raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch arXiv data: {response.status_code}")
 
-    root = ET.fromstring(response.text)
-    papers = []
-    for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
-        title = entry.find("{http://www.w3.org/2005/Atom}title").text
-        summary = entry.find("{http://www.w3.org/2005/Atom}summary").text
-        link = entry.find("{http://www.w3.org/2005/Atom}id").text
-        authors = [author.find("{http://www.w3.org/2005/Atom}name").text for author in entry.findall("{http://www.w3.org/2005/Atom}author")]
-        published_date = entry.find("{http://www.w3.org/2005/Atom}published").text 
+        root = ET.fromstring(response.text)
+        papers = []
+        for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
+            title = entry.find("{http://www.w3.org/2005/Atom}title").text
+            summary = entry.find("{http://www.w3.org/2005/Atom}summary").text
+            link = entry.find("{http://www.w3.org/2005/Atom}id").text
+            authors = [author.find("{http://www.w3.org/2005/Atom}name").text for author in entry.findall("{http://www.w3.org/2005/Atom}author")]
+            published_date = entry.find("{http://www.w3.org/2005/Atom}published").text 
 
-        papers.append({
-            "resource_type": "arxiv paper",
-            "title": title,
-            "summary": summary,
-            "link": link,
-            "authors": authors,
-            "published_date": published_date
-        })
-    return papers
+            papers.append({
+                "resource_type": "arxiv paper",
+                "title": title,
+                "summary": summary,
+                "link": link,
+                "authors": authors,
+                "published_date": published_date
+            })
+        return papers
+    except httpx.RequestError as e:
+        print(f"Network error while fetching arXiv papers: {e}")
+        raise HTTPException(status_code=500, detail=f"Network error while fetching arXiv data: {str(e)}")
+    except ET.ParseError as e:
+        print(f"Error parsing arXiv XML response: {e}")
+        raise HTTPException(status_code=500, detail="Error parsing arXiv response")
+    except Exception as e:
+        print(f"Unexpected error while fetching arXiv papers: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
 
