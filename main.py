@@ -95,6 +95,100 @@ AI_HANDBOOKS = [
     }
 ]
 
+# Popular AI/ML Courses from multiple platforms
+AI_COURSES = [
+    {
+        "resource_type": "courses",
+        "title": "Machine Learning Specialization",
+        "url": "https://www.coursera.org/specializations/machine-learning-introduction",
+        "thumbnail": "https://d3njjcbhbojbot.cloudfront.net/api/utilities/v1/imageproxy/https://s3.amazonaws.com/coursera-course-assets/topics/ml/large-icon.png",
+        "platform": "Coursera",
+        "description": "Master Machine Learning from Stanford University. Learn Supervised, Unsupervised, and Reinforcement Learning.",
+        "author": "Andrew Ng, Instructors"
+    },
+    {
+        "resource_type": "courses",
+        "title": "Deep Learning Specialization",
+        "url": "https://www.coursera.org/specializations/deep-learning",
+        "thumbnail": "https://d3njjcbhbojbot.cloudfront.net/api/utilities/v1/imageproxy/https://s3.amazonaws.com/coursera-course-assets/topics/deeplearning/large-icon.png",
+        "platform": "Coursera",
+        "description": "Master Deep Learning and Neural Networks. Build and train neural networks using TensorFlow and PyTorch.",
+        "author": "Andrew Ng, Instructors"
+    },
+    {
+        "resource_type": "courses",
+        "title": "Artificial Intelligence A-Z: Learn by Doing",
+        "url": "https://www.udemy.com/course/artificial-intelligence-az/",
+        "thumbnail": "https://img-c.udemycdn.com/course/750x422/1435544_466e_3.jpg",
+        "platform": "Udemy",
+        "description": "Build AI projects using AI algorithms. Master AI, Deep Learning, and Machine Learning with real projects.",
+        "author": "Hadelin de Ponteves, Kirill Eremenko"
+    },
+    {
+        "resource_type": "courses",
+        "title": "TensorFlow Developer Certificate in Collaboration with Google",
+        "url": "https://www.coursera.org/professional-certificates/tensorflow-in-practice",
+        "thumbnail": "https://d3njjcbhbojbot.cloudfront.net/api/utilities/v1/imageproxy/https://s3.amazonaws.com/coursera-course-assets/topics/tensorflow/large-icon.png",
+        "platform": "Coursera",
+        "description": "Learn to build and train neural networks using TensorFlow. Get TensorFlow Developer Certificate recognition.",
+        "author": "Laurence Moroney, Google"
+    },
+    {
+        "resource_type": "courses",
+        "title": "Introduction to Artificial Intelligence with Python",
+        "url": "https://cs50.harvard.edu/ai/",
+        "thumbnail": "https://cs50.harvard.edu/ai/image.png",
+        "platform": "Harvard CS50",
+        "description": "Learn to use libraries for AI, including scikit-learn, TensorFlow, and Keras.",
+        "author": "Harvard University, CS50"
+    },
+    {
+        "resource_type": "courses",
+        "title": "AI for Everyone",
+        "url": "https://www.coursera.org/learn/ai-for-everyone",
+        "thumbnail": "https://d3njjcbhbojbot.cloudfront.net/api/utilities/v1/imageproxy/https://s3.amazonaws.com/coursera-course-assets/topics/aiforeveryone/large-icon.png",
+        "platform": "Coursera",
+        "description": "Learn what AI can do, how it works, and how it can transform your business.",
+        "author": "Andrew Ng"
+    },
+    {
+        "resource_type": "courses",
+        "title": "Practical Deep Learning for Coders",
+        "url": "https://course.fast.ai/",
+        "thumbnail": "https://course.fast.ai/images/fastai_logo.png",
+        "platform": "Fast.ai",
+        "description": "Master practical deep learning for computer vision, NLP, and more using PyTorch.",
+        "author": "Jeremy Howard, fast.ai"
+    },
+    {
+        "resource_type": "courses",
+        "title": "Natural Language Processing Specialization",
+        "url": "https://www.coursera.org/specializations/natural-language-processing",
+        "thumbnail": "https://d3njjcbhbojbot.cloudfront.net/api/utilities/v1/imageproxy/https://s3.amazonaws.com/coursera-course-assets/topics/nlp/large-icon.png",
+        "platform": "Coursera",
+        "description": "Master NLP techniques including RNNs, LSTMs, and Transformers.",
+        "author": "Instructors, Coursera"
+    },
+    {
+        "resource_type": "courses",
+        "title": "Computer Vision Masterclass",
+        "url": "https://www.udemy.com/course/computer-vision-masterclass/",
+        "thumbnail": "https://img-c.udemycdn.com/course/750x422/2454633_4c40_2.jpg",
+        "platform": "Udemy",
+        "description": "Build 25+ Computer Vision projects using OpenCV and Deep Learning.",
+        "author": "Ahmed Fawzy Gad"
+    },
+    {
+        "resource_type": "courses",
+        "title": "Reinforcement Learning Specialization",
+        "url": "https://www.coursera.org/specializations/reinforcement-learning",
+        "thumbnail": "https://d3njjcbhbojbot.cloudfront.net/api/utilities/v1/imageproxy/https://s3.amazonaws.com/coursera-course-assets/topics/reinforcementlearning/large-icon.png",
+        "platform": "Coursera",
+        "description": "Master Reinforcement Learning from the ground up. Learn to build intelligent agents.",
+        "author": "Mark Rowland, Martha White, Adam White"
+    }
+]
+
 def hash_password(password: str) -> str:
     # Generate a salt
     salt = bcrypt.gensalt()
@@ -374,97 +468,39 @@ async def fetch_blogs(query: str, max_results: int = 5):
 
 
 async def fetch_coursera_courses(query: str, max_results: int = 10, page: int = 1):
-    """Fetch AI-related courses from Coursera API, including descriptions."""
+    """Fetch AI-related courses from curated list with search filtering."""
     try:
-        start_index = (page - 1) * max_results  # Calculate pagination offset
-
-        params = {
-            "q": "search",  # The query type
-            "query": query,  # The search string (AI, Machine Learning, etc.)
-            "limit": max_results,  # Number of results per page
-            "start": start_index,  # Pagination offset
-            "includes": "partnerIds,photoUrl,description"  # Request additional fields
-        }
-
-        print(f"Fetching Coursera courses with query: {query}")  # Debug print to check query string
-
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get(COURSERA_API_URL, params=params)
-
-        if response.status_code != 200:
-            print(f"Coursera API returned status {response.status_code}: {response.text}")
-            return []  # Return empty list instead of raising exception
-
-        # Debug: print the full response text
-        print(f"Response Body: {response.text[:500]}...")  # Truncate for logs
-
-        try:
-            data = response.json()
-        except Exception as e:
-            print(f"Error parsing Coursera response JSON: {e}")
-            return []
-
-        # Debug: check the structure of the response data
-        print(f"Response JSON keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
-
-        courses = []
-        if 'elements' in data and data['elements']:  # Check if 'elements' is present and not empty
-            try:
-                courses = [
-                    {
-                        "resource_type": "courses",
-                        "title": course.get("name", "Untitled Course"),
-                        "url": f"https://www.coursera.org/learn/{course.get('slug', '')}" if course.get('slug') else "https://www.coursera.org",
-                        "thumbnail": course.get("photoUrl", "https://www.coursera.org/default-thumbnail.jpg"),
-                        "platform": "Coursera",
-                        "description": course.get("description", "No description available")
-                    }
-                    for course in data["elements"]
-                    if course.get("name")  # Only include courses with a name
-                ]
-            except (KeyError, TypeError) as e:
-                print(f"Error parsing course elements: {e}")
-                courses = []
-        else:
-            # When 'elements' is missing or empty, extract data from facets
-            try:
-                facets = data.get("paging", {}).get("facets", {})
-                
-                # Get courses from the most relevant subdomain based on query
-                subdomains = facets.get("subdomains", {}).get("facetEntries", [])
-                
-                if subdomains:
-                    # Create artificial course entries from subdomain information
-                    for subdomain in subdomains[:max_results]:
-                        courses.append({
-                            "resource_type": "courses",
-                            "title": f"{subdomain.get('name', 'Unknown')} Courses",
-                            "url": f"https://www.coursera.org/browse/{subdomain.get('id', '')}",
-                            "thumbnail": "https://www.coursera.org/default-thumbnail.jpg",
-                            "platform": "Coursera",
-                            "description": f"Browse {subdomain.get('count', 0)} courses in {subdomain.get('name', 'this category')}"
-                        })
-                
-                print(f"Created {len(courses)} alternate recommendations from facets")
-            except (KeyError, TypeError) as e:
-                print(f"Error parsing facets: {e}")
-                courses = []
-
-        if not courses:
-            print("No courses found for the query")  # Debug print for empty result
-
-        return courses
-    except httpx.ReadTimeout:
-        print("Timeout while fetching Coursera courses")
-        return []
-    except httpx.RequestError as e:
-        print(f"Network error fetching Coursera courses: {e}")
-        return []
+        # Convert query to lowercase for matching
+        query_lower = query.lower()
+        
+        # Filter courses based on query matching title, description, and platform
+        filtered_courses = [
+            course for course in AI_COURSES
+            if query_lower in course.get("title", "").lower() or
+               query_lower in course.get("description", "").lower() or
+               query_lower in course.get("platform", "").lower() or
+               query_lower in course.get("author", "").lower()
+        ]
+        
+        # If no courses match, return all courses (better UX than empty list)
+        if not filtered_courses:
+            print(f"No courses matched query '{query}', returning popular courses")
+            filtered_courses = AI_COURSES
+        
+        # Apply pagination
+        start_index = (page - 1) * max_results
+        end_index = start_index + max_results
+        paginated_courses = filtered_courses[start_index:end_index]
+        
+        print(f"Returning {len(paginated_courses)} courses for query: {query}")
+        return paginated_courses
+        
     except Exception as e:
         error_trace = traceback.format_exc()
-        print(f"Unexpected error fetching Coursera courses: {e}")
+        print(f"Error fetching courses: {e}")
         print(f"Stack trace: {error_trace}")
-        return []
+        # Return popular courses as fallback
+        return AI_COURSES[:max_results]
 
 
 
